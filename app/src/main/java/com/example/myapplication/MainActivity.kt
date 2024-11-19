@@ -21,7 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-//test
+
 data class Player(val name: String, val color: String)
 
 class GameEngine {
@@ -41,7 +41,12 @@ class GameEngine {
         return false
     }
     fun isDraw(): Boolean{
-        return false
+        for(row in board){
+            for(cell in row){
+                if(cell.isEmpty()) return false
+            }
+        }
+        return true
     }
     fun reset(){
         for(row in board){
@@ -65,8 +70,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ConnectFourGame() {
-    val rows = 6
-    val columns = 7
     val gameEngine = remember{ GameEngine() }
     var currentPlayer by remember { mutableStateOf("Red")}
     var board by remember {mutableStateOf(gameEngine.getBoard())}
