@@ -56,4 +56,6 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation ("androidx.constraintlayout:constraintlayout:2.0.4")
+    implementation ("com.google.android.material:material:1.4.0")
 }
