@@ -153,7 +153,7 @@ fun ConnectFourGame() {
         Button(onClick = {
             gameEngine.reset()
             gameResult = null
-            currentPlayer = "Red"
+            currentPlayer = PlayerColor.Red
         }) {
             Text("Reset Game")
         }
