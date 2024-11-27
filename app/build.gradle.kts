@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google_services")
 }
 
 android {
@@ -63,5 +62,6 @@ dependencies {
     implementation ("androidx.constraintlayout:constraintlayout:2.0.4")
     implementation ("com.google.android.material:material:1.4.0")
     implementation(platform("com.google.firebase:firebase-bom:33.6.0"))
+    implementation("androidx.navigation:navigation-compose:2.8.4")
 
 }
