@@ -1,5 +1,6 @@
 package com.example.myapplication
 
+import android.adservices.adid.AdId
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -30,7 +31,7 @@ enum class PlayerColor(val color: Color){
     Red(Color.Red),
     Yellow(Color.Yellow)
 }
-data class Player(val name: String, val color: PlayerColor)
+data class Player(val id: String, val name: String, val color: PlayerColor)
 
 class GameEngine {
     private val board = Array(6) { Array<PlayerColor?>(7) {null} }
@@ -119,6 +120,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun LobbyScreen(navController: NavController, players: MutableList<Player>){
     var playerName by remember { mutableStateOf(TextFieldValue("")) }
+    val challenges = remember{ mutableStateMapOf<String, String>()  }
+    fun challengePlayer(challenger: Player, opponentId: String){
+        challenges[opponentId] = challenger.id
+    }
+
+    fun acceptChallenge(playerId: String){
+        val challengerId = challenges[playerId]
+        if(challengerId != null){
+            navController.navigate("game/$challengerId")
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -139,7 +151,13 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
             Button(
                 onClick = {
                     if(playerName.text.isNotBlank()){
-                        players.add(Player(playerName.text, if(players.size % 2 ==0) PlayerColor.Red else PlayerColor.Yellow))
+
+                        val newPlayer =  Player(
+                                id = "player${players.size +1}",
+                                name = playerName.text,
+                                color = if (players.size % 2 == 0) PlayerColor.Red else PlayerColor.Yellow
+                        )
+                        players.add(newPlayer)
                         playerName = TextFieldValue("")
                     }
                 }
@@ -151,10 +169,24 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
 
         players.forEach { player ->
             Text("${player.name} - ${player.color}")
+            Button(
+                onClick = {challengePlayer(player, "player${players.size +1}") }
+            ){
+                Text("Challenge")
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(onClick = { navController.navigate("game") }) {
+        challenges.forEach { (opponentId, challengerId) ->
+            Button(
+                onClick = {acceptChallenge(opponentId)}
+            ){
+                Text("Accept Challenge")
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = { navController.navigate("game/0") }) {
             Text("Start Game")
         }
     }
@@ -166,6 +198,11 @@ fun ConnectFourGame(navController: NavController) {
     var currentPlayer by remember { mutableStateOf(PlayerColor.Red) }
     val board = gameEngine.getBoard()
     var gameResult by remember { mutableStateOf<String?>(null) }
+    var highlightedColumn by remember { mutableStateOf(-1) }
+
+    fun highlightColumn(col: Int){
+        highlightedColumn = col
+    }
 
     fun playTurn(column: Int): String? {
         if (gameResult != null) return gameResult
@@ -203,7 +240,10 @@ fun ConnectFourGame(navController: NavController) {
                             PlayerColor.Yellow -> PlayerColor.Yellow.color
                             else -> Color.Gray
                         },
-                        onClick = { gameResult = playTurn(col) }
+                        onClick = {
+                            gameResult = playTurn(col)
+                        },
+                        isHighlighted = highlightedColumn == col
                     )
                 }
             }
@@ -222,12 +262,15 @@ fun ConnectFourGame(navController: NavController) {
 }
 
 @Composable
-fun Disc(color: Color, onClick: () -> Unit) {
+fun Disc(color: Color, onClick: () -> Unit, isHighlighted: Boolean) {
     Box(
         modifier = Modifier
             .size(48.dp)
             .padding(4.dp)
-            .background(color, shape = CircleShape)
+            .background(
+                color = if(isHighlighted) Color.LightGray else color,
+                shape = CircleShape
+            )
             .clickable(onClick = onClick)
     )
 }
