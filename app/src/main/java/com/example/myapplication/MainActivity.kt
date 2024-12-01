@@ -31,7 +31,12 @@ enum class PlayerColor(val color: Color){
     Red(Color.Red),
     Yellow(Color.Yellow)
 }
-data class Player(val id: String, val name: String, val color: PlayerColor)
+data class Player(
+    val id: String,
+    val name: String,
+    val color: PlayerColor,
+    var ready: Boolean = false
+)
 
 class GameEngine {
     private val board = Array(6) { Array<PlayerColor?>(7) {null} }
@@ -121,6 +126,7 @@ class MainActivity : ComponentActivity() {
 fun LobbyScreen(navController: NavController, players: MutableList<Player>){
     var playerName by remember { mutableStateOf(TextFieldValue("")) }
     val challenges = remember{ mutableStateMapOf<String, String>()  }
+    val allPlayersReady = players.size == 2 && players.all { it.ready }
     fun challengePlayer(challenger: Player, opponentId: String){
         challenges[opponentId] = challenger.id
     }
@@ -167,6 +173,49 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
         }
         Spacer(modifier = Modifier.height(16.dp))
 
+        players.forEach{player ->
+            Row(verticalAlignment = Alignment.CenterVertically){
+                Text("${player.name} - ${player.color} (${if (player.ready) "Ready" else "Not Ready"})")
+                Button(
+                    onClick = {
+                        player.ready = !player.ready
+                    }
+                ){
+                    Text(if(player.ready) "Unready" else "Ready")
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        players.forEach { player ->
+            Button(onClick = {challengePlayer(player, "player${players.size +1}")}){
+                Text("Challenge")
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        challenges.forEach{(opponentId, challengerId) ->
+            Button(
+                onClick = {acceptChallenge(opponentId)}
+            ){
+                Text("Accept Challenge")
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = {
+                if(allPlayersReady){
+                    navController.navigate("game")
+                }
+            },
+            enabled = allPlayersReady
+        ){
+            Text("Start Game")
+        }
+
+
+
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         players.forEach { player ->
             Text("${player.name} - ${player.color}")
             Button(
@@ -185,6 +234,18 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = {
+                if(allPlayersReady){
+                    navController.navigate("game")
+                }
+            },
+            enabled = allPlayersReady
+        ){
+            Text("Start Game")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Button(onClick = { navController.navigate("game/0") }) {
             Text("Start Game")
@@ -199,6 +260,18 @@ fun ConnectFourGame(navController: NavController) {
     val board = gameEngine.getBoard()
     var gameResult by remember { mutableStateOf<String?>(null) }
     var highlightedColumn by remember { mutableStateOf(-1) }
+
+    val player1 = Player("player1", "Player 1", PlayerColor.Red, ready = true )
+    val player2 = Player("player2", "Player 2", PlayerColor.Yellow, ready = true )
+    val challengerId = "player1"
+
+    val firstPlayer = if( challengerId == player1.id) player2 else player1
+    val secondPlayer = if( challengerId == player1.id) player1 else player2
+    currentPlayer = firstPlayer.color
+
+
+
+
 
     fun highlightColumn(col: Int){
         highlightedColumn = col
