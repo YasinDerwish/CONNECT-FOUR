@@ -114,8 +114,9 @@ class MainActivity : ComponentActivity() {
                     composable("lobby") {
                         LobbyScreen(navController = navController, players = players)
                     }
-                    composable("game"){
-                        ConnectFourGame(navController = navController)
+                    composable("game({challengerId}"){ backStackEntry ->
+                        val challengerId = backStackEntry.arguments?.getString("challengerId") ?: ""
+                        ConnectFourGame(navController = navController, challengerId = challengerId)
                     }
                 }
             }
@@ -127,6 +128,7 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
     var playerName by remember { mutableStateOf(TextFieldValue("")) }
     val challenges = remember{ mutableStateMapOf<String, String>()  }
     val allPlayersReady = players.size == 2 && players.all { it.ready }
+
     fun challengePlayer(challenger: Player, opponentId: String){
         challenges[opponentId] = challenger.id
     }
@@ -186,19 +188,13 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
+
         players.forEach { player ->
             Button(onClick = {challengePlayer(player, "player${players.size +1}")}){
                 Text("Challenge")
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        challenges.forEach{(opponentId, challengerId) ->
-            Button(
-                onClick = {acceptChallenge(opponentId)}
-            ){
-                Text("Accept Challenge")
-            }
-        }
+
         Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = {
@@ -219,7 +215,7 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
         players.forEach { player ->
             Text("${player.name} - ${player.color}")
             Button(
-                onClick = {challengePlayer(player, "player${players.size +1}") }
+                onClick = {challengePlayer(player, "player2")}
             ){
                 Text("Challenge")
             }
@@ -233,28 +229,16 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
                 Text("Accept Challenge")
             }
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = {
-                if(allPlayersReady){
-                    navController.navigate("game")
-                }
-            },
-            enabled = allPlayersReady
-        ){
-            Text("Start Game")
-        }
+
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(onClick = { navController.navigate("game/0") }) {
-            Text("Start Game")
-        }
+
     }
 
 }
 @Composable
-fun ConnectFourGame(navController: NavController) {
+fun ConnectFourGame(navController: NavController, challengerId: String) {
     val gameEngine = remember { GameEngine() }
     var currentPlayer by remember { mutableStateOf(PlayerColor.Red) }
     val board = gameEngine.getBoard()
@@ -265,8 +249,7 @@ fun ConnectFourGame(navController: NavController) {
     val player2 = Player("player2", "Player 2", PlayerColor.Yellow, ready = true )
     val challengerId = "player1"
 
-    val firstPlayer = if( challengerId == player1.id) player2 else player1
-    val secondPlayer = if( challengerId == player1.id) player1 else player2
+    val firstPlayer = if( challengerId == player1.id) player1 else player2
     currentPlayer = firstPlayer.color
 
 
