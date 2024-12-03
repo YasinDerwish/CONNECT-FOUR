@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -110,11 +113,16 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val players = remember { mutableStateListOf<Player>() }
 
-                NavHost(navController = navController, startDestination = "lobby"){
-                    composable("lobby") {
+
+                NavHost(navController = navController, startDestination = "main"){
+
+                    composable("main") {
+                        MainScreen(navController = navController)
+                    }
+                    composable("lobby"){
                         LobbyScreen(navController = navController, players = players)
                     }
-                    composable("game({challengerId}"){ backStackEntry ->
+                    composable("game/{challengerId}"){ backStackEntry ->
                         val challengerId = backStackEntry.arguments?.getString("challengerId") ?: ""
                         ConnectFourGame(navController = navController, challengerId = challengerId)
                     }
@@ -128,6 +136,23 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
     var playerName by remember { mutableStateOf(TextFieldValue("")) }
     val challenges = remember{ mutableStateMapOf<String, String>()  }
     val allPlayersReady = players.size == 2 && players.all { it.ready }
+    var selectedOpponentId by remember { mutableStateOf<String?>(null) }
+    val name = navController.currentBackStackEntry?.arguments?.getString("name")
+    val playerName = navController.currentBackStackEntry?.arguments?.getString("name")
+
+
+    LaunchedEffect(name) {
+        if (!playerName.isNullOrBlank() && players.none { it.name == playerName }) {
+            players.add(
+                Player(
+                    id = "player${players.size +1}",
+                    name = playerName,
+                    color = if(players.size % 2 == 0) PlayerColor.Red else PlayerColor.Yellow
+                )
+            )
+        }
+    }
+
 
     fun challengePlayer(challenger: Player, opponentId: String){
         challenges[opponentId] = challenger.id
@@ -207,19 +232,26 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
             Text("Start Game")
         }
 
-
-
-
         Spacer(modifier = Modifier.height(16.dp))
 
-        players.forEach { player ->
-            Text("${player.name} - ${player.color}")
-            Button(
-                onClick = {challengePlayer(player, "player2")}
-            ){
-                Text("Challenge")
-            }
-        }
+       if(players.size > 1) {
+           Text("Select an Opponent:")
+           DropdownMenuExample(players, selectedOpponentId) {opponentId ->
+               selectedOpponentId = opponentId
+           }
+           Button(
+               onClick = {
+                   val challenger = players.firstOrNull { it.ready }
+                   val opponentId = selectedOpponentId
+                   if(challenger != null && opponentId != null) {
+                       challengePlayer(challenger, opponentId)
+                   }
+               },
+               enabled = selectedOpponentId != null
+           ){
+               Text("Challenge")
+           }
+       }
         Spacer(modifier = Modifier.height(16.dp))
 
         challenges.forEach { (opponentId, challengerId) ->
@@ -230,13 +262,39 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
             }
         }
 
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-
     }
 
 }
+@Composable
+fun DropdownMenuExample(players: List<Player>, selectedOpponentId: String?, onSelect: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box{
+        Text(
+            text = selectedOpponentId?.let{ id ->
+                players.firstOrNull {it.id == id }?.name ?: "Select Opponent"
+            } ?: "Select Opponent",
+            modifier = Modifier
+                .clickable { expanded = true}
+                .background(Color.Gray, CircleShape)
+                .padding(8.dp)
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ){
+            players.forEach { player ->
+                DropdownMenuItem(
+                    text = {Text(player.name)},
+                    onClick = {
+                        onSelect(player.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
 @Composable
 fun ConnectFourGame(navController: NavController, challengerId: String) {
     val gameEngine = remember { GameEngine() }
@@ -247,22 +305,16 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
 
     val player1 = Player("player1", "Player 1", PlayerColor.Red, ready = true )
     val player2 = Player("player2", "Player 2", PlayerColor.Yellow, ready = true )
-    val challengerId = "player1"
 
     val firstPlayer = if( challengerId == player1.id) player1 else player2
     currentPlayer = firstPlayer.color
-
-
-
-
-
     fun highlightColumn(col: Int){
         highlightedColumn = col
     }
 
-    fun playTurn(column: Int): String? {
+   fun playTurn(column: Int): String? {
         if (gameResult != null) return gameResult
-        if (gameEngine.makeMove(column, Player("Player", currentPlayer))) {
+        if (gameEngine.makeMove(column, Player(currentPlayer.name, currentPlayer.name, currentPlayer))) {
             return when {
                 gameEngine.checkWin() -> "$currentPlayer wins!"
                 gameEngine.isDraw() -> "It's a draw!"
@@ -316,6 +368,53 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
         }
     }
 }
+@Composable
+fun MainScreen(navController: NavController){
+    var playerName by remember { mutableStateOf("") }
+    var showError by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ){
+        Text("Welcome to Connect Four", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(32.dp))
+
+        TextField(
+            value = playerName,
+            onValueChange = {
+                playerName = it
+                showError = false
+            },
+            label = {Text("Enter your name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if(showError){
+            Text(
+                text = "Name cannot be empty!",
+                color = Color.Red,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick ={
+                if(playerName.isNotBlank()){
+                    navController.navigate("lobby?name=$playerName")
+                }
+                else{
+                    showError = true
+                }
+            }
+        ){
+            Text("Go To Lobby")
+        }
+    }
+}
 
 @Composable
 fun Disc(color: Color, onClick: () -> Unit, isHighlighted: Boolean) {
@@ -335,6 +434,6 @@ fun Disc(color: Color, onClick: () -> Unit, isHighlighted: Boolean) {
 @Composable
 fun ConnectFourGamePreview() {
     MyApplicationTheme {
-        ConnectFourGame(navController = rememberNavController())
+        ConnectFourGame(navController = rememberNavController(), challengerId = "player1")
     }
 }
