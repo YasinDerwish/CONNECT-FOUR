@@ -29,6 +29,13 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.composable
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.mutableStateListOf
+
+class LobbyViewModel : ViewModel() {
+    val players = mutableStateListOf<Player>()
+}
 
 enum class PlayerColor(val color: Color){
     Red(Color.Red),
@@ -111,7 +118,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 val navController = rememberNavController()
-                val players = remember { mutableStateListOf<Player>() }
 
 
                 NavHost(navController = navController, startDestination = "main"){
@@ -120,7 +126,8 @@ class MainActivity : ComponentActivity() {
                         MainScreen(navController = navController)
                     }
                     composable("lobby"){
-                        LobbyScreen(navController = navController, players = players)
+                        val viewModel: LobbyViewModel = viewModel()
+                        LobbyScreen(navController = navController, viewModel)
                     }
                     composable("game/{challengerId}"){ backStackEntry ->
                         val challengerId = backStackEntry.arguments?.getString("challengerId") ?: ""
@@ -133,11 +140,11 @@ class MainActivity : ComponentActivity() {
 }
 @Composable
 fun LobbyScreen(navController: NavController, players: MutableList<Player>){
-    var playerName by remember { mutableStateOf(TextFieldValue("")) }
+    var enteredPlayerName by remember { mutableStateOf(TextFieldValue("")) }
     val challenges = remember{ mutableStateMapOf<String, String>()  }
     val allPlayersReady = players.size == 2 && players.all { it.ready }
     var selectedOpponentId by remember { mutableStateOf<String?>(null) }
-    val name = navController.currentBackStackEntry?.arguments?.getString("name")
+    val name = navController.previousBackStackEntry?.arguments?.getString("name")
     val playerName = navController.currentBackStackEntry?.arguments?.getString("name")
 
 
@@ -175,23 +182,23 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
 
         Row(verticalAlignment = Alignment.CenterVertically){
             BasicTextField(
-                value = playerName,
-                onValueChange = { playerName = it},
+                value = enteredPlayerName,
+                onValueChange = { enteredPlayerName = it},
                 modifier = Modifier
                     .background(Color.Gray, CircleShape)
                     .padding(8.dp)
             )
             Button(
                 onClick = {
-                    if(playerName.text.isNotBlank()){
+                    if(enteredPlayerName.text.isNotBlank()){
 
                         val newPlayer =  Player(
                                 id = "player${players.size +1}",
-                                name = playerName.text,
+                                name = enteredPlayerName.text,
                                 color = if (players.size % 2 == 0) PlayerColor.Red else PlayerColor.Yellow
                         )
                         players.add(newPlayer)
-                        playerName = TextFieldValue("")
+                        enteredPlayerName = TextFieldValue("")
                     }
                 }
             ){
@@ -243,7 +250,7 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
                onClick = {
                    val challenger = players.firstOrNull { it.ready }
                    val opponentId = selectedOpponentId
-                   if(challenger != null && opponentId != null) {
+                   if(challenger != null && opponentId != null && opponentId != challenger.id) {
                        challengePlayer(challenger, opponentId)
                    }
                },
@@ -365,6 +372,9 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
             currentPlayer = PlayerColor.Red
         }) {
             Text("Reset Game")
+        }
+        Button(onClick = {navController.navigate("lobby") }){
+            Text("Back to Lobby")
         }
     }
 }
