@@ -1,9 +1,6 @@
 package com.example.myapplication
 
-import android.adservices.adid.AdId
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,20 +19,29 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.constraintlayout.motion.widget.MotionController
 import androidx.navigation.compose.rememberNavController
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.NavHost // Definierar navigation rutten för lobby och spel skärmen
+//Skickar nödvändiga argument (exempelvis gameId) mellan skärmarna när man spelar multiplayer
 import androidx.navigation.compose.composable
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.mutableStateListOf
+import androidx.navigation.navArgument
+import com.google.firebase.database.*
+import com.google.firebase.database.FirebaseDatabase
+
+
+
 
 class LobbyViewModel : ViewModel() {
     val players = mutableStateListOf<Player>()
 }
+data class FirebaseGameState(
+    val board: Array<Array<String?>> = Array(6) { Array(7) { null } },
+    val currentPlayer: String = "Red",
+    val winner: String? = null
+)
 
 enum class PlayerColor(val color: Color){
     Red(Color.Red),
@@ -47,108 +53,99 @@ data class Player(
     val color: PlayerColor,
     var ready: Boolean = false
 )
-
+// GameEngine används för att behandla spelarens tur, vem som lagt spelpjäsen vart
+// Upptäcker när det blivit lika, or startar om spelet tillsammans med spel-statusen
 class GameEngine {
     private val board = Array(6) { Array<PlayerColor?>(7) {null} }
+    private var currentPlayer: PlayerColor = PlayerColor.Red
+    private var winner: PlayerColor? = null
+
+    fun isDraw(): Boolean{
+        for(row in board){
+            for(cell in row){
+                if(cell == null){
+                    return false
+                }
+            }
+        }
+        return winner == null
+    }
+
+
+
 
     fun getBoard() = board
+    fun getCurrentPlayer() = currentPlayer
+    fun getWinner() = winner
 
-    fun makeMove(column: Int, player: Player): Boolean {
+    fun makeMove(column: Int): Boolean {
+
+        if (winner != null) return false
+
         for (row in board.indices.reversed()) {
             if (board[row][column] == null) {
-                board[row][column] = player.color
+                board[row][column] = currentPlayer
+                winner = checkWin()
+                currentPlayer =
+                    if (currentPlayer == PlayerColor.Red) PlayerColor.Yellow else PlayerColor.Red
                 return true
             }
         }
         return false
     }
-
-    fun checkWin(): Boolean {
-        for (row in 0 until 6) {
-            for (col in 0 until 7) {
-                val color = board[row][col]
-                if (color != null && (
-                            checkDirection(row, col, 1, 0, color) ||  // Horizontal
-                                    checkDirection(row, col, 0, 1, color) ||  // Vertical
-                                    checkDirection(row, col, 1, 1, color) ||  // Diagonal Down
-                                    checkDirection(row, col, 1, -1, color)    // Diagonal Up
-                            )
-                ) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
-
-    private fun checkDirection(row: Int, col: Int, deltaRow: Int, deltaCol: Int, color: PlayerColor): Boolean {
-        var count = 0
-        var r = row
-        var c = col
-        for (i in 0 until 4) {
-            if (r in 0..5 && c in 0..6 && board[r][c] == color) {
-                count++
-                r += deltaRow
-                c += deltaCol
-            } else break
-        }
-        return count == 4
-    }
-
-    fun isDraw(): Boolean {
-        if (checkWin()) return false
-        for (row in board) {
-            for (cell in row) {
-                if (cell == null) return false
-            }
-        }
-        return true
-    }
-
+    // Försökt att göra en kod som skall hjälpa med att när kolumnen blir full, skall inget mer läggas till.
+    // Lyckades inte göra den rätt, slutar med att man kan lägga till hur många "spelpjäser" som helst
+    // kan sluta upp i en krasch
     fun reset() {
         for (row in board) {
             row.fill(null)
         }
+        winner = null
+        currentPlayer = PlayerColor.Red
+        // inte lyckats göra en kod där man kan ta bort eller byta ut spelare när de lagts till i lobbyn
     }
-}
-
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            MyApplicationTheme {
-                val navController = rememberNavController()
-
-
-                NavHost(navController = navController, startDestination = "main"){
-
-                    composable("main") {
-                        MainScreen(navController = navController)
-                    }
-                    composable("lobby"){
-                        val viewModel: LobbyViewModel = viewModel()
-                        LobbyScreen(navController = navController, viewModel)
-                    }
-                    composable("game/{challengerId}"){ backStackEntry ->
-                        val challengerId = backStackEntry.arguments?.getString("challengerId") ?: ""
-                        ConnectFourGame(navController = navController, challengerId = challengerId)
+    fun checkWin(): PlayerColor? {
+        val directions = listOf(
+            Pair(1, 0), // Horizontal
+            Pair(0, 1), // Vertical
+            Pair(1, 1), // Diagonal down-right
+            Pair(1, -1) // Diagonal up-right
+        )
+        for (row in board.indices) {
+            for (col in board[row].indices) {
+                val color = board[row][col] ?: continue
+                for ((dx, dy) in directions) {
+                    if ((0 until 4).all { i ->
+                            val x = row + i * dx
+                            val y = col + i * dy
+                            x in board.indices && y in board[0].indices && board[x][y] == color
+                        }
+                    ) {
+                        return color
+                        // inte gjort denna kod rätt
+                        // Kan resultera i en krasch
                     }
                 }
             }
         }
+        return null
     }
 }
+
 @Composable
 fun LobbyScreen(navController: NavController, players: MutableList<Player>){
     var enteredPlayerName by remember { mutableStateOf(TextFieldValue("")) }
-    val challenges = remember{ mutableStateMapOf<String, String>()  }
     val allPlayersReady = players.size == 2 && players.all { it.ready }
     var selectedOpponentId by remember { mutableStateOf<String?>(null) }
-    val name = navController.previousBackStackEntry?.arguments?.getString("name")
     val playerName = navController.currentBackStackEntry?.arguments?.getString("name")
+    val challenges = remember { mutableStateOf(mutableMapOf<String, String>()) }
+    // Är ingen "MutableState", UI kommer inte visa då när "challenges" läggs till/uppdateras.
+    //Slutar med att UI kan inte visa nya challenges och andra ny information
 
 
-    LaunchedEffect(name) {
+
+
+    LaunchedEffect(playerName) {
         if (!playerName.isNullOrBlank() && players.none { it.name == playerName }) {
             players.add(
                 Player(
@@ -159,14 +156,14 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
             )
         }
     }
-
+// Förhindrar att flera  av samma namn läggs till
 
     fun challengePlayer(challenger: Player, opponentId: String){
-        challenges[opponentId] = challenger.id
+        challenges.value[opponentId] = challenger.id
     }
 
     fun acceptChallenge(playerId: String){
-        val challengerId = challenges[playerId]
+        val challengerId = challenges.value[playerId]
         if(challengerId != null){
             navController.navigate("game/$challengerId")
         }
@@ -218,26 +215,21 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
                     Text(if(player.ready) "Unready" else "Ready")
                 }
             }
+            // ändrat ready-state förhindrar mutableState tracking. Kommer icke trigga igång UI
+            // Detta gör att UI inte uppdaterar för att visa en spelares status (Ready/Unready)
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        players.forEach { player ->
-            Button(onClick = {challengePlayer(player, "player${players.size +1}")}){
-                Text("Challenge")
+            Button(
+                onClick = {
+                    if (allPlayersReady) {
+                        navController.navigate("game")
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = {
-                if(allPlayersReady){
-                    navController.navigate("game")
-                }
-            },
-            enabled = allPlayersReady
-        ){
-            Text("Start Game")
-        }
+        },
+                enabled = allPlayersReady
+            ){
+                Text("Start Game")
+            }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -261,7 +253,7 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
        }
         Spacer(modifier = Modifier.height(16.dp))
 
-        challenges.forEach { (opponentId, challengerId) ->
+        challenges.value.forEach{ (opponentId, challengerId) ->
             Button(
                 onClick = {acceptChallenge(opponentId)}
             ){
@@ -273,25 +265,27 @@ fun LobbyScreen(navController: NavController, players: MutableList<Player>){
 
 }
 @Composable
+// Meningen med denna är att man skall kunna välja en spelare från de aktiva
+// Uppdaterar den nuvarande motståndarens ID
 fun DropdownMenuExample(players: List<Player>, selectedOpponentId: String?, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    Box{
+
+    Box {
         Text(
-            text = selectedOpponentId?.let{ id ->
-                players.firstOrNull {it.id == id }?.name ?: "Select Opponent"
+            text = selectedOpponentId?.let { id ->
+                players.firstOrNull { it.id == id }?.name ?: "Select Opponent"
             } ?: "Select Opponent",
-            modifier = Modifier
-                .clickable { expanded = true}
+            modifier = Modifier.clickable { expanded = true }
                 .background(Color.Gray, CircleShape)
                 .padding(8.dp)
         )
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
-        ){
+        ) {
             players.forEach { player ->
                 DropdownMenuItem(
-                    text = {Text(player.name)},
+                    text = { Text(player.name) },
                     onClick = {
                         onSelect(player.id)
                         expanded = false
@@ -301,8 +295,120 @@ fun DropdownMenuExample(players: List<Player>, selectedOpponentId: String?, onSe
         }
     }
 }
+@Composable
+// Använts för att integrera in Firebase med spelet
+// Detta för att multiplayer funktionen skall funka och att man inte bara spelar lokalt
+//använder LaunchedEffect för att hålla UI uppdaterat med bl.a board currentPlayer, och vem vinnaren är
+fun ConnectFourGameWithFirebase(navController: NavController, gameId: String) {
+    val database = FirebaseDatabase.getInstance()
+    val gameRef = database.getReference("games/$gameId")
+
+    var board by remember { mutableStateOf(Array(6) { Array<String?>(7) { null } }) }
+    var currentPlayer by remember { mutableStateOf("Red") }
+    var winner by remember { mutableStateOf<String?>(null) }
+
+
+    LaunchedEffect(gameId) {
+        val gameStateListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                snapshot.getValue(FirebaseGameState::class.java)?.let { gameState ->
+                    board = gameState.board
+                    currentPlayer = gameState.currentPlayer
+                    winner = gameState.winner
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Handle Firebase errors
+            }
+
+        }
+        gameRef.addValueEventListener(gameStateListener)
+
+        onDispose {
+            gameRef.removeEventListener(gameStateListener)
+        }
+        //Försökt fixa denna, den är inuti LaunchedEffect(gameId)
+        // När gameId ändrar, skall LaunchedEffect "cancel" den gamla
+        // Detta kan kanske inte hända, kan leda till "leaks" eller dubbla listeners för samma spelrunda.
+
+    }
+
+Column(
+modifier = Modifier.fillMaxSize(),
+horizontalAlignment = Alignment.CenterHorizontally
+) {
+    if (winner != null) {
+        Text("Winner: $winner", color = Color.Green)
+    } else {
+        Text("Current Player: $currentPlayer", color = if (currentPlayer == "Red") Color.Red else Color.Yellow)
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    board.forEachIndexed { rowIndex, row ->
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            row.forEachIndexed { colIndex, cell ->
+                Box(
+                    modifier = Modifier
+                        .size(50.dp)
+                        .padding(2.dp)
+                        .background(
+                            when (cell) {
+                                "Red" -> Color.Red
+                                "Yellow" -> Color.Yellow
+                                else -> Color.Gray
+                            },
+                            CircleShape
+                        )
+                        .clickable {
+                            if(winner == null && cell == null){
+                                gameRef.child("board/$rowIndex/$colIndex").setValue(currentPlayer)
+                                gameRef.child("currentPlayer").setValue(
+                                    if(currentPlayer == "Red") "Yellow" else "Red"
+                                )
+                            }
+                        }
+                )
+            }
+            }
+        }
+    }
+}
+@Composable
+//Själva skärmen för gameplay
+// UI används här för att "Reset Game", vem som vinnaren är och färgarna av spelpjäserna
+fun GameScreen(navController: NavController){
+    val gameId = navController.currentBackStackEntry?.arguments?.getString("gameId")
+    if (gameId != null) {
+        ConnectFourGameWithFirebase(navController, gameId = gameId)
+    } else {
+        Text("Error: No game ID found.")
+    }
+}
 
 @Composable
+fun App() {
+    val navController = rememberNavController()
+
+    NavHost(navController, startDestination = "lobby") {
+        composable("lobby") {
+            LobbyScreen(navController, players = mutableListOf())
+        }
+        composable("game") {
+            GameScreen(navController) // Navigerar till game utan att själva game finns, spelet laddas inte
+        }
+    }
+}
+
+@Composable
+// Används för game-logiken
+//Visar när "Win/Draw" skall implementeras när ett spel nått sitt slut
+// Har hand om turordningen
+// En 6x7 grid används för att hålla koll på storleken på själva spelbordet
 fun ConnectFourGame(navController: NavController, challengerId: String) {
     val gameEngine = remember { GameEngine() }
     var currentPlayer by remember { mutableStateOf(PlayerColor.Red) }
@@ -317,19 +423,25 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
     currentPlayer = firstPlayer.color
     fun highlightColumn(col: Int){
         highlightedColumn = col
+        // Kan inte på ett korrekt sätt implementera denna kod
+        // Kan inte visa när en korrekt speltur har gjorts
     }
+    // inte gjort denna kod rätt, kan sluta med att oförväntat spel, inkorrekt turordning kan uppkomma
 
-   fun playTurn(column: Int): String? {
+    fun playTurn(column: Int): String? {
         if (gameResult != null) return gameResult
-        if (gameEngine.makeMove(column, Player(currentPlayer.name, currentPlayer.name, currentPlayer))) {
-            return when {
-                gameEngine.checkWin() -> "$currentPlayer wins!"
+        if (gameEngine.makeMove(column)) {
+            gameResult = when {
+                gameEngine.checkWin() != null ->
+                    "$currentPlayer wins!"
+
                 gameEngine.isDraw() -> "It's a draw!"
                 else -> {
                     currentPlayer = if (currentPlayer == PlayerColor.Red) PlayerColor.Yellow else PlayerColor.Red
                     null
                 }
             }
+            return gameResult
         }
         return null
     }
@@ -378,7 +490,35 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
         }
     }
 }
+
 @Composable
+// själva navigationen och hur man navigerar sig till olika ställen inom spel-appen
+fun AppNavigation(navController: NavController) {
+
+    NavHost(navController = navController, startDestination = "mainScreen") {
+        composable("mainScreen") {
+            MainScreen(navController = navController)
+        }
+        composable("lobby?name={name}") { backStackEntry ->
+            val name = Uri.decode(backStackEntry.arguments?.getString("name") ?: "Guest")
+            LobbyScreen(navController = navController, playerName = name)
+        }
+
+        composable(
+            route = "game/{gameId}",
+            arguments = listOf(navArgument("gameId") { defaultValue = "defaultGame" })
+        ) { backStackEntry ->
+            val gameId = backStackEntry.arguments?.getString("gameId") ?: "defaultGame"
+            ConnectFourGameWithFirebase(navController = navController, gameId = gameId)
+        }
+
+    }
+}
+//
+
+@Composable
+// används när man skriver sitt namn och joinar lobby-skärmen
+//Skriver ut ett error om namn-fältet är tomt
 fun MainScreen(navController: NavController){
     var playerName by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
@@ -432,12 +572,9 @@ fun Disc(color: Color, onClick: () -> Unit, isHighlighted: Boolean) {
         modifier = Modifier
             .size(48.dp)
             .padding(4.dp)
-            .background(
-                color = if(isHighlighted) Color.LightGray else color,
-                shape = CircleShape
-            )
+            .background(color, CircleShape)
             .clickable(onClick = onClick)
-    )
+    )// Själva spelpjäsen som man använder i spelet
 }
 
 @Preview(showBackground = true)
