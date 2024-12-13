@@ -18,11 +18,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+
 
 class LobbyViewModel : ViewModel() {
     private val _players = MutableStateFlow<List<Player>>(emptyList())
@@ -75,7 +73,8 @@ class LobbyViewModel : ViewModel() {
 
 
 @Composable
-fun LobbyScreen(navController: NavController, viewModel: LobbyViewModel = viewModel()) {
+fun LobbyScreen(
+    navController: NavController, viewModel: LobbyViewModel = viewModel(), playerName: String) {
     val players by viewModel.players.collectAsState()
     val challenges by viewModel.challenges.collectAsState()
     var enteredPlayerName by remember { mutableStateOf(TextFieldValue("")) }

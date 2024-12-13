@@ -1,11 +1,10 @@
 package com.example.myapplication
-
-import androidx.navigation.compose.composable
+//Skickar nödvändiga argument (exempelvis gameId) mellan skärmarna när man spelar multiplayer
 import android.net.Uri
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,49 +15,57 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.navigation.compose.rememberNavController
-import com.example.myapplication.ui.theme.MyApplicationTheme
 import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost // Definierar navigation rutten för lobby och spel skärmen
-//Skickar nödvändiga argument (exempelvis gameId) mellan skärmarna när man spelar multiplayer
+import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.lifecycle.ViewModel
-import androidx.compose.runtime.mutableStateListOf
+import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.google.firebase.database.*
+import com.example.myapplication.LobbyScreen
 
 object NavRoutes {
     const val Main_Screen = "mainScreen"
-    const val Lobby = "lobby?name={name}"
+    const val Lobby = "lobby"
     const val Game = "game/{gameId}"
 
-
-
+}
+class MainActivity : ComponentActivity(){
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MyApplicationTheme {
+                val navController = rememberNavController()
+                AppNavigation(navController)
+            }
+        }
+    }
 }
 
 @Composable
 // själva navigationen och hur man navigerar sig till olika ställen inom spel-appen
 fun AppNavigation(navController: NavController) {
 
-    NavHost(navController = navController, startDestination = "mainScreen") {
+    NavHost(navController = navController, startDestination = NavRoutes.Main_Screen) {
         composable(NavRoutes.Main_Screen) {
             MainScreen(navController = navController)
         }
-        composable(NavRoutes.Lobby) { backStackEntry ->
-            val name = Uri.decode(backStackEntry.arguments?.getString("name") ?: "Guest")
+        composable(
+            route = NavRoutes.Lobby
+        ) { backStackEntry ->
+            val name = backStackEntry.arguments?.getString("name") ?: "Guest"
             LobbyScreen(navController = navController, playerName = name)
         }
 
-        composable(NavRoutes.Game) { backStackEntry ->
+        composable(
+            route = NavRoutes.Game,
+            arguments = listOf(navArgument("gameId") { defaultValue = "defaultGame" })
+        ) { backStackEntry ->
             val gameId = backStackEntry.arguments?.getString("gameId") ?: "defaultGame"
             ConnectFourGameWithFirebase(navController = navController, gameId = gameId)
         }
-
     }
 }
-//
-
-@Composable
 // används när man skriver sitt namn och joinar lobby-skärmen
 //Skriver ut ett error om namn-fältet är tomt
 fun MainScreen(navController: NavController){
@@ -96,28 +103,19 @@ fun MainScreen(navController: NavController){
         Button(
             onClick ={
                 if(playerName.isNotBlank()){
-                    navController.navigate("lobby?name=$playerName")
+                    navController.navigate("${NavRoutes.Lobby}?name=${Uri.encode(playerName)}")
                 }
                 else{
                     showError = true
                 }
             }
-        ){
+        )
+        {
             Text("Go To Lobby")
         }
     }
 }
 
-@Composable
-fun Disc(color: Color, onClick: () -> Unit, isHighlighted: Boolean) {
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .padding(4.dp)
-            .background(color, CircleShape)
-            .clickable(onClick = onClick)
-    )// Själva spelpjäsen som man använder i spelet
-}
 
 @Preview(showBackground = true)
 @Composable
@@ -126,3 +124,4 @@ fun ConnectFourGamePreview() {
         ConnectFourGame(navController = rememberNavController(), challengerId = "player1")
     }
 }
+

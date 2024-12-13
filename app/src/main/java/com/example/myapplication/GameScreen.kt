@@ -1,6 +1,5 @@
 package com.example.myapplication
 
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,15 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
-import androidx.compose.runtime.DisposableEffect as DisposableEffect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -50,6 +43,7 @@ data class FirebaseGameState(
 enum class PlayerColor(val color: Color){
     Red(Color.Red),
     Yellow(Color.Yellow)
+
 }
 data class Player(
     val id: String,
@@ -61,7 +55,7 @@ data class Player(
 
 class GameViewModel : ViewModel() {
     var board by mutableStateOf(Array(6) {Array<String?>(7) {null} })
-    var currentPlayer by mutableStateOf("Red")
+    var currentPlayer by mutableStateOf(PlayerColor.Red)
     var gameResult by mutableStateOf<String?>(null)
     private val gameEngine = GameEngine()
 
@@ -70,10 +64,10 @@ class GameViewModel : ViewModel() {
 
         if(gameEngine.makeMove(column)){
             gameResult = when{
-                gameEngine.checkWin() != null -> "$currentPlayer wins!"
+                gameEngine.checkWin() != null -> "${currentPlayer.name} wins!"
                 gameEngine.isDraw() -> "It's a draw!"
                 else -> {
-                    currentPlayer = if (currentPlayer == "Red") "Yellow" else "Red"
+                    currentPlayer = if (currentPlayer == PlayerColor.Red) PlayerColor.Yellow else PlayerColor.Red
                     null
                 }
             }
@@ -84,7 +78,7 @@ class GameViewModel : ViewModel() {
     fun resetGame() {
         gameEngine.reset()
         gameResult = null
-        currentPlayer = "Red"
+        currentPlayer = PlayerColor.Red
         board = Array(6) {Array<String?>(7) {null} }
     }
 }
@@ -97,19 +91,8 @@ class GameEngine {
     private var winner: PlayerColor? = null
 
     fun isDraw(): Boolean{
-        for(row in board){
-            for(cell in row){
-                if(cell == null){
-                    return false
-                }
-            }
-        }
-        return winner == null
+        return board.all { row -> row.all { it != null } } && winner == null
     }
-
-
-
-
     fun getBoard() = board
     fun getCurrentPlayer() = currentPlayer
     fun getWinner() = winner
@@ -133,13 +116,13 @@ class GameEngine {
     // Lyckades inte göra den rätt, slutar med att man kan lägga till hur många "spelpjäser" som helst
     // kan sluta upp i en krasch
     fun reset() {
-        for (row in board) {
-            row.fill(null)
-        }
+        for (row in board)row.fill(null)
         winner = null
         currentPlayer = PlayerColor.Red
+        }
+
         // inte lyckats göra en kod där man kan ta bort eller byta ut spelare när de lagts till i lobbyn
-    }
+
     fun checkWin(): PlayerColor? {
         val directions = listOf(
             Pair(1, 0), // Horizontal
@@ -179,26 +162,34 @@ fun GameScreen(navController: NavController){
         Text("Error: No game ID found.")
     }
 }
-
 @Composable
-fun App() {
+fun Disc(color:Color, onClick: () -> Unit){
+    Box(
+        modifier = Modifier
+            .size(50.dp)
+            .padding(2.dp)
+            .background(color, CircleShape)
+            .clickable { onClick() }
+    )
+}
+/*fun App() {
     val navController = rememberNavController()
 
     NavHost(navController, startDestination = "lobby") {
         composable("lobby") {
-            LobbyScreen(navController)
+            LobbyScreen(navController, playerName = name)
         }
         composable("game") {
             GameScreen(navController) // Navigerar till game utan att själva game finns, spelet laddas inte
         }
     }
 }
-
-@Composable
+*/
 // Används för game-logiken
 //Visar när "Win/Draw" skall implementeras när ett spel nått sitt slut
 // Har hand om turordningen
 // En 6x7 grid används för att hålla koll på storleken på själva spelbordet
+@Composable
 fun ConnectFourGame(navController: NavController, challengerId: String) {
     val gameViewModel: GameViewModel = viewModel()
     val board = gameViewModel.board
@@ -211,10 +202,6 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
     val firstPlayer = if (challengerId == player1.id) player1 else player2
     gameViewModel.currentPlayer = firstPlayer.color
 
-    fun playTurn(column: Int): String? {
-        if (gameResult != null) return gameResult
-        return gameViewModel.playTurn(column)
-    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -222,7 +209,7 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = gameResult ?: "Current Player: $currentPlayer",
+            text = gameResult ?: "Current Player: ${currentPlayer}",
             style = MaterialTheme.typography.headlineMedium
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -232,8 +219,8 @@ fun ConnectFourGame(navController: NavController, challengerId: String) {
                 for (col in board[row].indices) {
                     Disc(
                         color = when (board[row][col]) {
-                            PlayerColor.Red -> PlayerColor.Red.color
-                            PlayerColor.Yellow -> PlayerColor.Yellow.color
+                            "Red" -> Color.Red
+                            "Yellow" -> Color.Yellow
                             else -> Color.Gray
                         },
                         onClick = {
@@ -271,6 +258,7 @@ fun ConnectFourGameWithFirebase(navController: NavController, gameId: String) {
     var winner by remember { mutableStateOf<String?>(null) }
 
 
+
     LaunchedEffect(gameId) {
         val gameStateListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -288,19 +276,17 @@ fun ConnectFourGameWithFirebase(navController: NavController, gameId: String) {
         }
         gameRef.addValueEventListener(gameStateListener)
 
-        DisposableEffect(gameRef) {
-            gameRef.addValueEventListener(gameStateListener)
 
-            onDispose {
-                gameRef.removeEventListener(gameStateListener)
-            }
-        }
+                   gameRef.removeEventListener(gameStateListener)
+
+           }
+
 
         //Försökt fixa denna, den är inuti LaunchedEffect(gameId)
         // När gameId ändrar, skall LaunchedEffect "cancel" den gamla
         // Detta kan kanske inte hända, kan leda till "leaks" eller dubbla listeners för samma spelrunda.
 
-    }
+
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -335,9 +321,10 @@ fun ConnectFourGameWithFirebase(navController: NavController, gameId: String) {
                             .clickable {
                                 if(winner == null && cell == null){
                                     gameRef.child("board/$rowIndex/$colIndex").setValue(currentPlayer)
-                                    gameRef.child("currentPlayer").setValue(
-                                        if(currentPlayer == "Red") "Yellow" else "Red"
-                                    )
+
+
+                                        val nextPlayer = if(currentPlayer == "Red") "Yellow" else "Red"
+                        gameRef.child("currentPlayer").setValue(nextPlayer)
                                 }
                             }
                     )
